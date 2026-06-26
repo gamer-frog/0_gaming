@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // Data
-import { champions, getChampionsByRole, searchChampions, type ChampionDB } from '@/data/champions-db';
+import { champions, getChampionsByRole, searchChampions, getChampionImg, type ChampionDB } from '@/data/champions-db';
 import { eloGuides, type EloRank } from '@/data/elo-guides';
 import { tips, getTipsByCategory, type TipCategory, type TipDifficulty } from '@/data/tips-data';
 import { currentMeta } from '@/data/meta-report';
@@ -215,9 +215,17 @@ function ChampionsTab() {
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <div>
-                <h3 className="font-bold text-lol-text text-lg">{champ.name}</h3>
-                <p className="text-xs text-lol-dim">{champ.title}</p>
+              <div className="flex items-center gap-3">
+                <img
+                  src={getChampionImg(champ.imgSlug)}
+                  alt={champ.name}
+                  className="w-12 h-12 rounded-lg border border-lol-gold-dark/30"
+                  loading="lazy"
+                />
+                <div>
+                  <h3 className="font-bold text-lol-text text-lg">{champ.name}</h3>
+                  <p className="text-xs text-lol-dim">{champ.title}</p>
+                </div>
               </div>
               <div className={`px-2.5 py-1 rounded-lg bg-gradient-to-br font-bold text-xs ${tierColors[champ.tier]}`}>
                 {champ.tier}
