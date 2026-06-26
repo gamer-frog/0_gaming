@@ -1,418 +1,616 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Search, ArrowUp } from 'lucide-react';
-import { ChampionIcon } from '@/components/moba/champion-icon';
-import { RoleBadge } from '@/components/moba/badges';
-import type { Champion, GameSelection, TaskItem } from '@/components/moba/types';
+import {
+  Shield, Swords, Trophy, TrendingUp, Lightbulb,
+  Search, ChevronDown, ChevronRight, Star, Zap, Eye, Brain, Target, BookOpen
+} from 'lucide-react';
 
-// Hooks
-import { useGameData } from '@/hooks/use-game-data';
-import { useFavorites } from '@/hooks/use-favorites';
-import { useGlobalSearch } from '@/hooks/use-global-search';
-import { useModKey } from '@/hooks/use-mod-key';
-import { useScrollToTop } from '@/hooks/use-scroll-to-top';
-import { useSummonerSearch } from '@/hooks/use-summoner-search';
-import { GameDataContext } from '@/hooks/game-data-context';
+// Data
+import { champions, getChampionsByRole, searchChampions, type ChampionDB } from '@/data/champions-db';
+import { eloGuides, type EloRank } from '@/data/elo-guides';
+import { tips, getTipsByCategory, type TipCategory, type TipDifficulty } from '@/data/tips-data';
+import { currentMeta } from '@/data/meta-report';
 
-// Components
-import { GoldParticles } from '@/components/moba/gold-particles';
-import { AppHeader } from '@/components/moba/app-header';
-import { SidebarNav } from '@/components/moba/sidebar-nav';
-import { BottomNav } from '@/components/moba/bottom-nav';
-import { GameSelectorLanding } from '@/components/moba/game-selector';
-import { ChampionModal } from '@/components/moba/champion-modal';
-import { LoadingScreen } from '@/components/moba/loading-screen';
-import { MinimapDecoration } from '@/components/moba/minimap-decoration';
-import { ActivityPopup } from '@/components/moba/activity-popup';
-import { FloatingNotes } from '@/components/moba/floating-notes';
-import { TabContent } from '@/components/moba/tab-content';
+// ============================================================
+// TIER COLORS
+// ============================================================
+const tierColors: Record<string, string> = {
+  S: 'from-amber-500 to-yellow-400 text-black',
+  A: 'from-emerald-500 to-green-400 text-black',
+  B: 'from-blue-500 to-cyan-400 text-white',
+  C: 'from-slate-400 to-slate-500 text-white',
+  D: 'from-red-500 to-red-700 text-white',
+};
 
-// ============ MAIN APP ============
-export default function Home() {
-  // ---- Game & navigation state ----
-  const [selectedGame, setSelectedGame] = useState<GameSelection>(null);
-  const [activeTab, setActiveTab] = useState('tierlist');
+const tierBg: Record<string, string> = {
+  S: 'bg-amber-500/10 border-amber-500/30',
+  A: 'bg-emerald-500/10 border-emerald-500/30',
+  B: 'bg-blue-500/10 border-blue-500/30',
+  C: 'bg-slate-500/10 border-slate-500/30',
+  D: 'bg-red-500/10 border-red-500/30',
+};
 
-  // ---- Data fetching (hook) ----
-  const {
-    champions, patches, insights, tasks, proPicks, combos,
-    loading, fetchError, liveVersions, lastUpdate, isNewPatch, isRefreshing,
-    fetchData, handleRefresh, setTasks, setIsNewPatch,
-  } = useGameData();
+const roles = ['Top', 'Jungle', 'Mid', 'ADC', 'Support'] as const;
+const tipCategories: { key: TipCategory; label: string; icon: React.ReactNode }[] = [
+  { key: 'fundamental', label: 'Fundamental', icon: <BookOpen className="w-4 h-4" /> },
+  { key: 'micro', label: 'Micro', icon: <Target className="w-4 h-4" /> },
+  { key: 'macro', label: 'Macro', icon: <Eye className="w-4 h-4" /> },
+  { key: 'mental', label: 'Mentalidad', icon: <Brain className="w-4 h-4" /> },
+  { key: 'draft', label: 'Draft', icon: <Zap className="w-4 h-4" /> },
+];
 
-  // ---- Loading screen ----
-  const [showLoading, setShowLoading] = useState(true);
-  const [appReady, setAppReady] = useState(false);
+const tabs = [
+  { id: 'guides', label: 'Guias de Elo', icon: <Shield className="w-5 h-5" /> },
+  { id: 'champions', label: 'Campeones', icon: <Swords className="w-5 h-5" /> },
+  { id: 'tierlist', label: 'Tier List', icon: <Trophy className="w-5 h-5" /> },
+  { id: 'meta', label: 'Meta Report', icon: <TrendingUp className="w-5 h-5" /> },
+  { id: 'tips', label: 'Tips', icon: <Lightbulb className="w-5 h-5" /> },
+];
 
-  // Safety fallback: auto-dismiss loading after 10s
-  useEffect(() => {
-    if (!showLoading) return;
-    const timer = setTimeout(() => {
-      setAppReady(true);
-      setShowLoading(false);
-    }, 10000);
-    return () => clearTimeout(timer);
-  }, [showLoading]);
+// ============================================================
+// ELO GUIDES TAB
+// ============================================================
+function EloGuidesTab() {
+  const [selectedRank, setSelectedRank] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<'micro' | 'macro' | 'mentalidad' | 'draft'>('micro');
 
-  const handleSkipLoading = useCallback(() => {
-    setAppReady(true);
-    setShowLoading(false);
-  }, []);
+  const ranks = eloGuides.map(g => g.rank);
 
-  // Mark app ready when initial fetch completes
-  useEffect(() => {
-    if (!loading) {
-      setAppReady(true);
-    }
-  }, [loading]);
-
-  // ---- Search & filter state ----
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState('Todos');
-  const [proRegionFilter, setProRegionFilter] = useState('');
-
-  // ---- Champion modal ----
-  const [selectedChampion, setSelectedChampion] = useState<Champion | null>(null);
-
-  // ---- Favorites (hook) ----
-  const { favorites, toggleFavorite } = useFavorites();
-
-  // ---- Summoner search (hook) ----
-  const {
-    summonerName, setSummonerName,
-    summonerRegion, setSummonerRegion,
-    summonerData, summonerLoading, summonerError,
-    handleSearchSummoner,
-  } = useSummonerSearch();
-
-  // ---- Global search (hook) ----
-  const {
-    globalSearchOpen, setGlobalSearchOpen,
-    globalSearchQuery, setGlobalSearchQuery,
-    globalSearchRef, searchResults,
-  } = useGlobalSearch(selectedGame, champions);
-
-  // ---- Scroll to top (hook) ----
-  const { showBackToTop, scrollToTop } = useScrollToTop();
-
-  // ---- OS-aware modifier key (for keyboard shortcut display) ----
-  const { modLabel, modSymbol } = useModKey();
-
-  // ---- Game transition flash ----
-  const [flashColor, setFlashColor] = useState<string | null>(null);
-
-  // ---- Mobile sidebar drawer ----
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // ---- Tab change with scroll-to-top ----
-  const handleTabChange = useCallback((tab: string) => {
-    setActiveTab(tab);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
-
-  // ---- Listen for notification bell tab switch ----
-  useEffect(() => {
-    function handleTabSwitch(e: Event) {
-      const detail = (e as CustomEvent).detail;
-      const VALID_TABS = ['tierlist', 'patches', 'combos', 'comparison', 'coaching', 'competitive', 'guides', 'profile', 'novedades', 'ideas', 'tasks', 'roadmap'];
-      if (typeof detail === 'string' && VALID_TABS.includes(detail)) setActiveTab(detail);
-    }
-    window.addEventListener('moba-sage-switch-tab', handleTabSwitch);
-    return () => window.removeEventListener('moba-sage-switch-tab', handleTabSwitch);
-  }, []);
-
-  // ---- Game selection ----
-  const handleSelectGame = useCallback((game: GameSelection) => {
-    setFlashColor(game === 'lol' ? 'rgba(200,170,110,0.15)' : 'rgba(10,203,230,0.15)');
-    setTimeout(() => setFlashColor(null), 400);
-    setSelectedGame(game);
-    setActiveTab('tierlist');
-  }, []);
-
-  const handleBackToSelector = useCallback(() => setSelectedGame(null), []);
-
-  // ---- Champion toggle (modal) ----
-  const handleToggleChampion = useCallback((champion: Champion) => {
-    setSelectedChampion(prev => prev?.id === champion.id ? null : champion);
-  }, []);
-
-  // ---- Search select (global command palette) ----
-  const handleSearchSelect = useCallback((champ: Champion) => {
-    setSelectedChampion(champ);
-    setGlobalSearchOpen(false);
-    setGlobalSearchQuery('');
-  }, []);
-
-  // ---- Task status toggle ----
-  const handleToggleTask = useCallback(async (task: TaskItem) => {
-    const nextStatus = task.status === 'pending' ? 'running' : task.status === 'running' ? 'done' : 'pending';
-    try {
-      const res = await fetch('/api/tasks', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: task.id, status: nextStatus }),
-      });
-      if (!res.ok) {
-        console.error('Task update failed:', res.status);
-        return;
-      }
-      const updated = await res.json();
-      if (typeof updated?.status !== 'string') {
-        console.error('Task update returned invalid status:', updated);
-        return;
-      }
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: updated.status } : t));
-    } catch (err) {
-      console.error('Task update error:', err);
-    }
-  }, []);
-
-  // ---- Build context value (memoized — prevents unnecessary re-renders in all consumers) ----
-  const contextValue = useMemo(() => ({
-    activeTab, selectedGame,
-    champions, patches, insights, tasks, combos, proPicks,
-    loading, fetchError,
-    searchQuery, roleFilter, proRegionFilter,
-    favorites,
-    summonerName, summonerRegion, summonerData, summonerLoading, summonerError,
-    liveVersions,
-    onSearchChange: setSearchQuery,
-    onRoleFilterChange: setRoleFilter,
-    onProRegionFilterChange: setProRegionFilter,
-    onToggleFavorite: toggleFavorite,
-    onChampionClick: handleToggleChampion,
-    onSummonerNameChange: setSummonerName,
-    onSummonerRegionChange: setSummonerRegion,
-    onSearchSummoner: handleSearchSummoner,
-    fetchData,
-    handleToggleTask,
-    onRetryFetch: () => { fetchError && fetchData(); },
-  }), [
-    activeTab, selectedGame, champions, patches, insights, tasks, combos, proPicks,
-    loading, fetchError, searchQuery, roleFilter, proRegionFilter, favorites,
-    summonerName, summonerRegion, summonerData, summonerLoading, summonerError,
-    liveVersions, toggleFavorite, handleToggleChampion, handleSearchSummoner, fetchData, handleToggleTask,
-  ]);
-
-  // ============ RENDER ============
   return (
-    <div className="min-h-screen flex flex-col overflow-x-hidden bg-lol-bg" style={{ width: '100%' }}>
-      {/* Skip to content — accessibility */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[200] focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold bg-gradient-to-br from-lol-gold to-lol-gold-dark text-lol-bg"
-      >
-        Ir al contenido principal
-      </a>
+    <div className="space-y-6">
+      <div className="text-center mb-8">
+        <h1 className="lol-title text-3xl sm:text-4xl text-lol-gold mb-3">Guias por Rango</h1>
+        <p className="text-lol-muted max-w-2xl mx-auto">Tips específicos para cada rango. Desde los basics de Iron hasta la maestría de Challenger. Seleccioná tu rango actual o el que querés alcanzar.</p>
+      </div>
 
-      {/* Loading Screen — z-210, self-contained, timeline + "Entrar" button */}
-      <AnimatePresence>
-        {showLoading && (
-          <LoadingScreen
-            onSkip={handleSkipLoading}
-            dataReady={!loading}
-            dataStats={{
-              champions: champions.length,
-              insights: insights.length,
-              proPicks: proPicks.length,
-              combos: combos.length,
-              patches: patches.length,
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Global Search Overlay (Command Palette) */}
-      <AnimatePresence>
-        {globalSearchOpen && selectedGame && (
-          <motion.div
-            className="fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] p-4"
-            style={{ backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setGlobalSearchOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: -10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: -10 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              className="w-full max-w-lg rounded-2xl overflow-hidden"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Buscar campeón"
-              style={{
-                background: 'linear-gradient(180deg, rgba(30,35,40,0.98), rgba(10,14,26,0.98))',
-                border: '1.5px solid rgba(200,170,110,0.3)',
-                boxShadow: '0 0 60px rgba(200,170,110,0.1), 0 25px 50px rgba(0,0,0,0.6)',
-              }}
-              onClick={e => e.stopPropagation()}
+      {/* Rank selector */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {ranks.map(rank => {
+          const guide = eloGuides.find(g => g.rank === rank)!;
+          const isActive = selectedRank === rank;
+          return (
+            <motion.button
+              key={rank}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setSelectedRank(isActive ? null : rank)}
+              className={`relative p-4 rounded-xl border-2 transition-all cursor-pointer text-left ${
+                isActive
+                  ? 'border-lol-gold bg-lol-gold/10 shadow-[0_0_20px_rgba(200,170,110,0.15)]'
+                  : 'border-lol-gold-dark/20 bg-lol-card hover:border-lol-gold/40'
+              }`}
             >
-              {/* Search input */}
-              <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid rgba(120,90,40,0.15)' }}>
-                <Search className="w-5 h-5 text-lol-gold shrink-0" />
-                <input
-                  ref={globalSearchRef}
-                  type="text"
-                  value={globalSearchQuery}
-                  onChange={e => setGlobalSearchQuery(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && searchResults.length > 0) {
-                      handleSearchSelect(searchResults[0]);
-                    }
-                  }}
-                  placeholder="Buscar campeón..."
-                  className="flex-1 bg-transparent text-lol-text text-lg placeholder:text-lol-dim outline-none lol-title"
-                  style={{ fontFamily: 'inherit', letterSpacing: '0.05em' }}
-                  role="searchbox"
-                  aria-label="Buscar campeón"
-                />
-                <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] text-lol-dim bg-lol-gold-dark/10 border border-lol-gold-dark/20">
-                  <span className="text-[10px]">{modSymbol}</span>K
-                </kbd>
+              <div className="flex items-center gap-2 mb-1">
+                <Shield className="w-4 h-4" style={{ color: guide.color }} />
+                <span className="lol-label text-sm font-bold" style={{ color: guide.color }}>{rank}</span>
               </div>
+              <div className="flex gap-1 mt-2">
+                {['micro', 'macro', 'mentalidad', 'draft'].map(s => (
+                  <div key={s} className="h-1 flex-1 rounded-full" style={{ backgroundColor: isActive ? guide.color : 'rgba(200,170,110,0.15)' }} />
+                ))}
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
 
-              {/* Results */}
-              <div className="max-h-72 overflow-y-auto scrollbar-none" role="listbox" aria-label="Resultados de búsqueda">
-                {searchResults.length === 0 && globalSearchQuery.trim().length > 0 ? (
-                  <div className="px-5 py-8 text-center">
-                    <Search className="w-8 h-8 mx-auto mb-2 text-lol-gold-dark/30" />
-                    <p className="text-xs text-lol-dim">No se encontraron campeones</p>
+      {/* Guide content */}
+      <AnimatePresence mode="wait">
+        {selectedRank && (
+          <motion.div
+            key={selectedRank}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {(() => {
+              const guide = eloGuides.find(g => g.rank === selectedRank)!;
+              const sections: { key: typeof activeSection; label: string; icon: React.ReactNode; data: string[] }[] = [
+                { key: 'micro', label: 'MICRO', icon: <Target className="w-4 h-4" />, data: guide.micro },
+                { key: 'macro', label: 'MACRO', icon: <Eye className="w-4 h-4" />, data: guide.macro },
+                { key: 'mentalidad', label: 'MENTALIDAD', icon: <Brain className="w-4 h-4" />, data: guide.mentalidad },
+                { key: 'draft', label: 'DRAFT', icon: <Zap className="w-4 h-4" />, data: guide.draft },
+              ];
+              return (
+                <div className="rounded-2xl border border-lol-gold-dark/20 bg-lol-card overflow-hidden">
+                  <div className="p-5 border-b border-lol-gold-dark/15" style={{ backgroundColor: guide.color + '15' }}>
+                    <h2 className="lol-title text-2xl" style={{ color: guide.color }}>
+                      {selectedRank} — Guia Completa
+                    </h2>
                   </div>
-                ) : (
-                  searchResults.map(champ => (
-                    <motion.button
-                      key={champ.id}
-                      onClick={() => handleSearchSelect(champ)}
-                      className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-lol-card/60 transition-colors cursor-pointer"
-                      role="option"
-                      aria-selected={false}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <ChampionIcon name={champ.name} tier={champ.tier} />
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="text-sm font-semibold text-lol-text truncate">{champ.name}</p>
-                        <p className="text-[10px] text-lol-dim truncate">{champ.title}</p>
-                      </div>
-                      <RoleBadge role={champ.role} />
-                      <span className={`text-[10px] font-mono font-semibold ${champ.winRate >= 52 ? 'text-lol-green' : 'text-lol-muted'}`}>{champ.winRate}%</span>
-                    </motion.button>
-                  ))
-                )}
-              </div>
-
-              {/* Footer hint */}
-              <div className="px-5 py-2.5 flex items-center justify-between text-[10px] text-lol-dim border-t border-lol-gold-dark/10">
-                <span aria-live="polite">{searchResults.length} campeones disponibles</span>
-                <span>Enter para seleccionar · Esc para cerrar</span>
-              </div>
-            </motion.div>
+                  {/* Section tabs */}
+                  <div className="flex border-b border-lol-gold-dark/15">
+                    {sections.map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setActiveSection(s.key)}
+                        className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-all border-b-2 ${
+                          activeSection === s.key
+                            ? 'border-lol-gold text-lol-gold'
+                            : 'border-transparent text-lol-muted hover:text-lol-text'
+                        }`}
+                      >
+                        {s.icon}
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Tips */}
+                  <div className="p-5 space-y-4">
+                    {sections.find(s => s.key === activeSection)!.data.map((tip, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="flex gap-3 p-4 rounded-xl bg-lol-bg/50 border border-lol-gold-dark/10"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-lol-gold/20 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-xs font-bold text-lol-gold">{i + 1}</span>
+                        </div>
+                        <p className="text-sm text-lol-text leading-relaxed">{tip}</p>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Activity Popup — only after loading screen is fully gone */}
-      {appReady && <ActivityPopup />}
-
-      {/* Gold Particles */}
-      <GoldParticles />
-
-      {/* Game Switch Flash Overlay */}
-      <AnimatePresence>
-        {flashColor && (
-          <motion.div
-            className="fixed inset-0 z-[100] pointer-events-none lol-flash-overlay"
-            style={{ backgroundColor: flashColor }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Header */}
-      <AppHeader
-        selectedGame={selectedGame}
-        liveVersions={liveVersions}
-        lastUpdate={lastUpdate}
-        isNewPatch={isNewPatch}
-        onBackToSelector={handleBackToSelector}
-        onDismissPatch={() => setIsNewPatch(false)}
-        onMenuToggle={() => setSidebarOpen(prev => !prev)}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-
-      {/* Sidebar Navigation — desktop fixed + mobile drawer */}
-      {selectedGame && <SidebarNav activeTab={activeTab} onTabChange={handleTabChange} gamePatch={selectedGame === 'wildrift' ? liveVersions.wr : liveVersions.gamePatch} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />}
-
-      {/* Content — offset for sidebar on desktop, bottom nav on mobile */}
-      <main id="main-content" className={`flex-1 w-full px-3 sm:px-4 py-4 sm:py-6 transition-all duration-300 overflow-x-hidden ${selectedGame ? 'lg:ml-[220px] lg:w-[calc(100%-220px)] pb-24 lg:pb-6' : ''}`} role="main">
-        <div className={selectedGame ? 'max-w-6xl mx-auto' : ''}>
-          <AnimatePresence mode="popLayout">
-            {!selectedGame ? (
-              <GameSelectorLanding onSelectGame={handleSelectGame} patchVersion={liveVersions.gamePatch || liveVersions.lol} championCount={champions.length} key="selector" />
-            ) : (
-              <GameDataContext.Provider value={contextValue}>
-                <TabContent />
-              </GameDataContext.Provider>
-            )}
-          </AnimatePresence>
+      {!selectedRank && (
+        <div className="text-center py-12 text-lol-dim">
+          <Shield className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>Seleccioná un rango para ver la guía completa</p>
         </div>
-        {selectedGame && <FloatingNotes />}
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// CHAMPIONS DATABASE TAB
+// ============================================================
+function ChampionsTab() {
+  const [search, setSearch] = useState('');
+  const [selectedChamp, setSelectedChamp] = useState<ChampionDB | null>(null);
+
+  const filtered = useMemo(() => search ? searchChampions(search) : champions, [search]);
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-8">
+        <h1 className="lol-title text-3xl sm:text-4xl text-lol-gold mb-3">Base de Campeones</h1>
+        <p className="text-lol-muted max-w-2xl mx-auto">{champions.length} campeones con stats, builds, counters y sinergias curadas para el meta actual.</p>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-md mx-auto">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-lol-dim" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar campeón, rol..."
+          className="w-full pl-12 pr-4 py-3 rounded-xl bg-lol-card border border-lol-gold-dark/20 text-lol-text placeholder:text-lol-dim outline-none focus:border-lol-gold/50 transition-colors"
+        />
+      </div>
+
+      {/* Champion grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {filtered.map(champ => (
+          <motion.div
+            key={champ.id}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setSelectedChamp(selectedChamp?.id === champ.id ? null : champ)}
+            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+              selectedChamp?.id === champ.id
+                ? 'border-lol-gold bg-lol-gold/10'
+                : `${tierBg[champ.tier]} hover:border-lol-gold/40`
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="font-bold text-lol-text text-lg">{champ.name}</h3>
+                <p className="text-xs text-lol-dim">{champ.title}</p>
+              </div>
+              <div className={`px-2.5 py-1 rounded-lg bg-gradient-to-br font-bold text-xs ${tierColors[champ.tier]}`}>
+                {champ.tier}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-lol-muted">
+              <span className="px-2 py-0.5 rounded bg-lol-bg/50 border border-lol-gold-dark/10">{champ.role}</span>
+              <span>WR: <span className={champ.winRate >= 51 ? 'text-lol-green' : 'text-lol-text'}>{champ.winRate}%</span></span>
+              <span>PR: {champ.pickRate}%</span>
+              <span className="ml-auto">{'★'.repeat(champ.difficulty)}{'☆'.repeat(5 - champ.difficulty)}</span>
+            </div>
+
+            {/* Expanded details */}
+            <AnimatePresence>
+              {selectedChamp?.id === champ.id && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-3 pt-3 border-t border-lol-gold-dark/15 space-y-3">
+                    <div>
+                      <p className="text-xs text-lol-dim mb-1">BUILD CORE</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {champ.buildCore.map(item => (
+                          <span key={item} className="px-2 py-0.5 rounded bg-lol-gold/10 text-lol-gold text-xs">{item}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-lol-dim mb-1">SKILL ORDER</p>
+                      <span className="px-2 py-0.5 rounded bg-lol-bg/50 text-lol-text text-xs border border-lol-gold-dark/10">{champ.skillOrder}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-lol-dim mb-1">COUNTERS</p>
+                        <div className="flex flex-wrap gap-1">
+                          {champ.counters.map(c => (
+                            <span key={c} className="px-1.5 py-0.5 rounded text-xs bg-red-500/10 text-lol-danger border border-red-500/20">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-lol-dim mb-1">SINERGIAS</p>
+                        <div className="flex flex-wrap gap-1">
+                          {champ.synergies.map(s => (
+                            <span key={s} className="px-1.5 py-0.5 rounded text-xs bg-emerald-500/10 text-lol-green border border-emerald-500/20">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// TIER LIST TAB
+// ============================================================
+function TierListTab() {
+  const [activeRole, setActiveRole] = useState<string>('Top');
+
+  const roleChampions = useMemo(() => getChampionsByRole(activeRole as ChampionDB['role']), [activeRole]);
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-8">
+        <h1 className="lol-title text-3xl sm:text-4xl text-lol-gold mb-3">Tier List</h1>
+        <p className="text-lol-muted max-w-2xl mx-auto">Patch {currentMeta.patch} — Campeones clasificados por rol y tier. Actualizado cada patch.</p>
+      </div>
+
+      {/* Role tabs */}
+      <div className="flex justify-center gap-2 flex-wrap">
+        {roles.map(role => (
+          <button
+            key={role}
+            onClick={() => setActiveRole(role)}
+            className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+              activeRole === role
+                ? 'bg-lol-gold text-lol-bg'
+                : 'bg-lol-card text-lol-muted hover:text-lol-text border border-lol-gold-dark/15'
+            }`}
+          >
+            {role}
+          </button>
+        ))}
+      </div>
+
+      {/* Tier sections */}
+      {(['S', 'A', 'B', 'C'] as const).map(tier => {
+        const tierChamps = roleChampions.filter(c => c.tier === tier);
+        if (tierChamps.length === 0) return null;
+        return (
+          <div key={tier} className={`rounded-2xl border-2 p-5 ${tierBg[tier]}`}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center font-black text-2xl ${tierColors[tier]}`}>
+                {tier}
+              </div>
+              <div>
+                <h3 className="font-bold text-lol-text text-lg">Tier {tier}</h3>
+                <p className="text-xs text-lol-muted">{tierChamps.length} campeones en {activeRole}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {tierChamps.map(champ => (
+                <div
+                  key={champ.id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-lol-bg/40 border border-lol-gold-dark/10"
+                >
+                  <div>
+                    <p className="font-semibold text-lol-text text-sm">{champ.name}</p>
+                    <p className="text-[11px] text-lol-dim">{champ.title}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-mono font-bold ${champ.winRate >= 51 ? 'text-lol-green' : 'text-lol-text'}`}>{champ.winRate}%</p>
+                    <p className="text-[10px] text-lol-dim">PR {champ.pickRate}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================
+// META REPORT TAB
+// ============================================================
+function MetaReportTab() {
+  const m = currentMeta;
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-8">
+        <h1 className="lol-title text-3xl sm:text-4xl text-lol-gold mb-3">Meta Report</h1>
+        <p className="text-lol-muted">Patch {m.patch} — {m.date}</p>
+      </div>
+
+      {/* Summary */}
+      <div className="p-6 rounded-2xl bg-lol-card border border-lol-gold-dark/20">
+        <h2 className="lol-label text-lol-gold text-sm mb-3">RESUMEN DEL PATCH</h2>
+        <p className="text-lol-text leading-relaxed">{m.summary}</p>
+      </div>
+
+      {/* Hot Topics */}
+      <div className="p-6 rounded-2xl bg-lol-card border border-lol-gold-dark/20">
+        <h2 className="lol-label text-lol-gold text-sm mb-4">HOT TOPICS</h2>
+        <div className="space-y-2">
+          {m.hotTopics.map((topic, i) => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-lol-bg/40">
+              <div className="w-6 h-6 rounded-full bg-lol-warning/20 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-lol-warning">!</span>
+              </div>
+              <p className="text-sm text-lol-text leading-relaxed">{topic}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Champions Up / Down */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-6 rounded-2xl bg-lol-card border border-emerald-500/20">
+          <h2 className="lol-label text-lol-green text-sm mb-4">CAMPEONES QUE SUBIERON</h2>
+          <div className="space-y-3">
+            {m.championsUp.map(c => (
+              <div key={c.name} className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center font-black text-sm ${tierColors[c.tier]}`}>{c.tier}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-lol-text text-sm">{c.name} <span className="text-lol-dim">· {c.role}</span></p>
+                  <p className="text-xs text-lol-dim truncate">{c.change}</p>
+                </div>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${c.status === 'buffed' ? 'bg-emerald-500/20 text-lol-green' : c.status === 'new' ? 'bg-blue-500/20 text-blue-400' : 'bg-lol-gold/20 text-lol-gold'}`}>
+                  {c.status.toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="p-6 rounded-2xl bg-lol-card border border-red-500/20">
+          <h2 className="lol-label text-lol-danger text-sm mb-4">CAMPEONES QUE BAJARON</h2>
+          <div className="space-y-3">
+            {m.championsDown.map(c => (
+              <div key={c.name} className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center font-black text-sm ${tierColors[c.tier]}`}>{c.tier}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-lol-text text-sm">{c.name} <span className="text-lol-dim">· {c.role}</span></p>
+                  <p className="text-xs text-lol-dim truncate">{c.change}</p>
+                </div>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${c.status === 'nerfed' ? 'bg-red-500/20 text-lol-danger' : 'bg-lol-gold/20 text-lol-gold'}`}>
+                  {c.status.toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Key Items & Runes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-6 rounded-2xl bg-lol-card border border-lol-gold-dark/20">
+          <h2 className="lol-label text-lol-gold text-sm mb-4">ITEMS CLAVE</h2>
+          <div className="space-y-2">
+            {m.keyItems.map((item, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-lol-bg/40">
+                <ChevronRight className="w-4 h-4 text-lol-gold shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-lol-text">{item.name}</p>
+                  <p className="text-xs text-lol-dim">{item.change}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="p-6 rounded-2xl bg-lol-card border border-lol-gold-dark/20">
+          <h2 className="lol-label text-lol-gold text-sm mb-4">RUNAS CLAVE</h2>
+          <div className="space-y-2">
+            {m.keyRunes.map((rune, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-lol-bg/40">
+                <ChevronRight className="w-4 h-4 text-lol-gold shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-lol-text">{rune.name}</p>
+                  <p className="text-xs text-lol-dim">{rune.change}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// TIPS TAB (filterable)
+// ============================================================
+function TipsTab() {
+  const [activeCategory, setActiveCategory] = useState<TipCategory | 'all'>('all');
+  const [maxDiff, setMaxDiff] = useState<number>(5);
+
+  const filtered = useMemo(() => {
+    let result = activeCategory === 'all' ? tips : getTipsByCategory(activeCategory);
+    return result.filter(t => t.difficulty <= maxDiff);
+  }, [activeCategory, maxDiff]);
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-8">
+        <h1 className="lol-title text-3xl sm:text-4xl text-lol-gold mb-3">Tips Filtrables</h1>
+        <p className="text-lol-muted max-w-2xl mx-auto">{tips.length} tips curados. Filtra por categoría y dificultad.</p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 justify-center mb-2">
+        <button
+          onClick={() => setActiveCategory('all')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+            activeCategory === 'all' ? 'bg-lol-gold text-lol-bg' : 'bg-lol-card text-lol-muted border border-lol-gold-dark/15'
+          }`}
+        >
+          Todos ({tips.length})
+        </button>
+        {tipCategories.map(cat => (
+          <button
+            key={cat.key}
+            onClick={() => setActiveCategory(cat.key)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              activeCategory === cat.key ? 'bg-lol-gold text-lol-bg' : 'bg-lol-card text-lol-muted border border-lol-gold-dark/15'
+            }`}
+          >
+            {cat.icon}
+            {cat.label} ({getTipsByCategory(cat.key).length})
+          </button>
+        ))}
+      </div>
+
+      {/* Difficulty filter */}
+      <div className="flex items-center justify-center gap-3">
+        <span className="text-xs text-lol-dim">Dificultad max:</span>
+        {[1, 2, 3, 4, 5].map(d => (
+          <button
+            key={d}
+            onClick={() => setMaxDiff(d)}
+            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              maxDiff >= d ? 'bg-lol-gold text-lol-bg' : 'bg-lol-card text-lol-dim border border-lol-gold-dark/15'
+            }`}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+
+      {/* Tips grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {filtered.map(tip => (
+          <motion.div
+            key={tip.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 rounded-xl bg-lol-card border border-lol-gold-dark/15 hover:border-lol-gold/30 transition-colors"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-lol-text text-sm">{tip.title}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-lol-gold/10 text-lol-gold border border-lol-gold-dark/10">{tip.category}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-lol-bg/50 text-lol-dim border border-lol-gold-dark/10">{'★'.repeat(tip.difficulty)}</span>
+              </div>
+            </div>
+            <p className="text-xs text-lol-muted leading-relaxed">{tip.description}</p>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN PAGE
+// ============================================================
+export default function Home() {
+  const [activeTab, setActiveTab] = useState('guides');
+
+  return (
+    <div className="min-h-screen bg-lol-bg text-lol-text">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b border-lol-gold-dark/15" style={{ background: 'rgba(10,14,26,0.95)', backdropFilter: 'blur(12px)' }}>
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-lol-gold to-lol-gold-dark flex items-center justify-center">
+              <Swords className="w-4 h-4 text-lol-bg" />
+            </div>
+            <div>
+              <h1 className="lol-label text-lol-gold text-sm leading-tight">LOL PRO GUIDE</h1>
+              <p className="text-[10px] text-lol-dim">Patch {currentMeta.patch}</p>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-1">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-lol-gold/15 text-lol-gold'
+                    : 'text-lol-muted hover:text-lol-text'
+                }`}
+              >
+                {tab.icon}
+                <span className="hidden md:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile bottom nav */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-lol-gold-dark/15 flex" style={{ background: 'rgba(10,14,26,0.97)', backdropFilter: 'blur(12px)' }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-all cursor-pointer ${
+              activeTab === tab.id ? 'text-lol-gold' : 'text-lol-dim'
+            }`}
+          >
+            {tab.icon}
+            <span className="text-[9px]">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Content */}
+      <main className="max-w-6xl mx-auto px-4 py-6 pb-24 sm:pb-6">
+        <AnimatePresence mode="wait">
+          {activeTab === 'guides' && <EloGuidesTab key="guides" />}
+          {activeTab === 'champions' && <ChampionsTab key="champions" />}
+          {activeTab === 'tierlist' && <TierListTab key="tierlist" />}
+          {activeTab === 'meta' && <MetaReportTab key="meta" />}
+          {activeTab === 'tips' && <TipsTab key="tips" />}
+        </AnimatePresence>
       </main>
 
-      {/* Champion Modal */}
-      <AnimatePresence>
-        {selectedChampion && !showLoading && (
-          <ChampionModal key={selectedChampion.id} champion={selectedChampion} onClose={() => setSelectedChampion(null)} />
-        )}
-      </AnimatePresence>
-
-      {/* Minimap Decoration - only on landing page */}
-      {!selectedGame && <MinimapDecoration />}
-
-      {/* Bottom Navigation — mobile only */}
-      {selectedGame && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} onOpenSidebar={() => setSidebarOpen(true)} />}
-
-      <div className="lol-divider" />
-
-      {/* Footer — hidden on mobile (sidebar covers it) */}
-      <footer className={`border-t border-lol-gold-dark/15 py-4 mt-auto bg-lol-bg/60 ${selectedGame ? 'hidden lg:block' : ''}`}>
-        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between text-xs text-lol-gold-dark">
-          <span>MOBA SAGE &copy; 2026</span>
-          <span className="flex items-center gap-1">
-            <Brain className="w-3 h-3" />
-            Powered by IA
-          </span>
-        </div>
+      {/* Footer */}
+      <footer className="border-t border-lol-gold-dark/10 py-4 text-center text-[10px] text-lol-dim">
+        LOL PRO GUIDE &copy; 2026 — Datos curados, no API externa. Patch {currentMeta.patch}
       </footer>
-
-      {/* Back to Top Button */}
-      <AnimatePresence>
-        {showBackToTop && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 10 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            onClick={scrollToTop}
-            className="fixed bottom-[140px] lg:bottom-8 right-4 w-10 h-10 rounded-full flex items-center justify-center z-30 cursor-pointer"
-            style={{
-              background: 'linear-gradient(135deg, #c8aa6e, #785a28)',
-              boxShadow: '0 0 20px rgba(200,170,110,0.3), 0 4px 12px rgba(0,0,0,0.4)',
-            }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            aria-label="Volver arriba"
-          >
-            <ArrowUp className="w-5 h-5 text-lol-bg" />
-          </motion.button>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
