@@ -1,0 +1,171 @@
+# BOTARDO HARNESS — gaming-moba (DIV3)
+# Updated: 2026-06-07 22:50 +08:00
+# Protocol: BOOT LOADER v4.0 UNIVERSAL
+# Tick: 254
+
+## IDENTITY
+- **Sandbox**: gaming-moba
+- **Division**: DIV3 (Gaming)
+- **Role**: WORKER (content research, no repo push)
+- **App**: moba-sage v0.3.0 — LoL & Wild Rift Analytics
+- **Deploy**: https://moba-sage.vercel.app (Vercel)
+- **Repo**: gamer-frog/moba-sage (GitHub)
+
+## HISTORICAL CONTEXT
+
+### Timeline
+| Date | Event |
+|------|-------|
+| Apr 18 | Project inception — BRAINSTORM.md created |
+| Apr 22-25 | Ralph Loop era — QA scans, bug fixes (ticks.md) |
+| May 5 | Boot session — initial HANDOFF.md |
+| May 8-9 | Champion wiki/tierlist research scrapes |
+| May 25 | 24-slot CRON system live (brain/SLOTS.md) |
+| May 26 | LoL Patch 26.11 LIVE — tierlist went stale |
+| May 27 | T01-T07 all DONE, queue empty, CAPA 2 proposals |
+| May 29 | Last real CRON activity (cross_agent report #367) |
+| Jun 2 | BOTARDO OS registered, botardo.env created |
+| Jun 4 | Sandbox registered in bo_sandboxes (Supabase) |
+| Jun 5 | BOOT LOADER v3.0 first tick in Supabase |
+| Jun 6 13:51 | BOOT LOADER v4.0 UNIVERSAL upgrade |
+| Jun 7 22:27 | CEO directive — file audit + harness + tasks loaded |
+| Jun 7 22:45 | Tick 254 — 3x audit complete, tierlist v17 (26.11), report generated |
+
+### CRON Evolution
+- v7 (Job 134194): Original 24-slot CRON on moba-sage repo — 367 ticks
+- v9 Harness Edition: Consolidated to 3 jobs
+- v3.0: Supabase-first, 6 PASO protocol — 32 ticks
+- v4.0 UNIVERSAL: 7 PASO, bo_handoff, COLMENA — 254 ticks (current)
+
+### Known Issues (from self_proposals.md)
+1. 111/111 aiInsight fields empty — UI promises content it never delivers
+2. ~~tierlist-feed.json stale at patch 26.10~~ FIXED: Updated to v17 patch 26.11 (Tick 254)
+3. GitHub PAT empty in botardo.env — needs CEO action
+4. _STATUS.md metrics outdated
+5. 28 guides in feed, 9 stale (26.9/26.8), 9 empty fileName
+6. No Patch Day protocol defined
+7. ORDERS.md file intermittently disappears
+
+## CURRENT STATE (Tick 254)
+- **Active**: YES — executing CEO directives
+- **CRON**: Running v4.0, 254 ticks
+- **Vercel**: HTTP 200 stable
+- **DB Tasks**: 11 total (6 done, 5 pending, 0 in_progress)
+- **Directives**: 0 pending
+- **App Health**: Tierlist updated to 26.11. Guides still need attention.
+
+## FALLBACK TASK SYSTEM (SI NO HAY A, HACER B)
+
+When directives = 0 AND tasks = 0 AND no CEO message, the worker auto-executes from this priority queue. Each fallback task creates a bo_task entry so progress is tracked.
+
+### Priority 1: CONTENT FRESHNESS (every tick)
+```
+IF tierlist-feed.json older than 48h:
+  → Web search for current patch tierlist
+  → Update tierlist-feed.json
+  → Mark task done
+IF guides-feed.json has stale entries:
+  → Identify 3 stalest guides
+  → Web search for updated builds/runes
+  → Update guide content
+  → Mark task done
+```
+
+### Priority 2: META MONITORING (daily)
+```
+Web search: "LoL patch notes [current_month]"
+Web search: "Wild Rift patch notes [current_month]"
+Web search: "LoL meta tier list [current_week]"
+→ If new patch detected: create URGENT task for tierlist update
+→ If meta shift detected: create HIGH task for analysis
+→ Post findings to bo_activity_log
+```
+
+### Priority 3: CONTENT GENERATION (weekly)
+```
+Pick champion from: [champions with empty aiInsight]
+  → Web search: "[champion] build runes [current_patch]"
+  → Web search: "[champion] counter synergy [current_patch]"
+  → Generate aiInsight content (200+ chars)
+  → Report count to gaming-lider
+```
+
+### Priority 4: HEALTH CHECKS (daily)
+```
+curl -s -o /dev/null -w "%{http_code}" https://moba-sage.vercel.app
+→ IF not 200: report immediately to gaming-lider
+→ IF 200: log to activity
+Check: tierlist-feed.json patch vs current known patch
+Check: patches-feed.json last entry date
+Check: guides-feed.json stale count
+```
+
+### Priority 5: MAINTENANCE (weekly)
+```
+Audit src/data/champion-data.ts for new champions
+Audit public/ JSON feeds for consistency
+Clean up any new loose files in sandbox root
+Review and consolidate duplicate files
+```
+
+## WORKER ROLE
+As DIV3 WORKER, this sandbox:
+- Does NOT push to GitHub (read-only repo)
+- Does NOT modify Next.js source code
+- DOES: Content research (web search, data gathering)
+- DOES: Update JSON data feeds (tierlist, guides, patches, builds)
+- DOES: Report findings to gaming-lider
+- DOES: Update Supabase tasks and handoffs
+- DOES: Monitor Vercel health
+- DOES: Create fallback tasks when idle
+
+## ESCALATION RULES
+- If tierlist goes stale >48h → auto-update + report to gaming-lider
+- If Vercel goes down → report immediately
+- If new patch detected → auto-create URGENT task
+- If aiInsight gaps found → report count + start populating
+- If web search fails 3x → report infrastructure issue
+
+## REFLEXION: POR QUE LA APP ESTABA MUERTA
+
+### Root Cause Analysis
+
+La MOBA app pasó ~158 horas (May 29 → Jun 7) en SILENCIO total. Causas:
+
+1. **CRON vacío**: El Job 179051 envía template v7 pero el agent ejecuta v4.0. El template v7 no genera directivas útiles — solo heartbeat + check + sync. Sin directivas, sin tareas = SILENCIO infinito.
+
+2. **Cola de tareas vacía**: Las tareas originales (Reporte diario, Meta analysis) eran del sistema v3.0, de baja prioridad. Cuando se completaron, no se recargaron nuevas tareas. El harness original no tenía sistema de fallback.
+
+3. **Falta de auto-tareas**: El protocolo v4.0 define LEY 9 SILENCIO (silencio cuando idle) PERO no define qué hacer cuando idle para MANTENER la app viva. El worker esperaba directivas externas en vez de auto-generar trabajo.
+
+4. **GitHub PAT roto**: Sin PAT funcional, el worker no podía push al repo, lo que limitaba su capacidad de actualizar contenido desplegado.
+
+5. **Desconexión gaming-lider**: El worker reportó tareas stale a gaming-lider pero nunca recibió respuesta. Sin liderazgo, el worker se quedaba esperando.
+
+### Soluciones Implementadas (Tick 254)
+
+1. **botardo.harness actualizado** con sistema de FALLBACK TASKS — cuando no hay directivas ni tareas, el worker auto-ejecuta: content freshness → meta monitoring → content generation → health checks → maintenance.
+
+2. **8 tareas cargadas en bo_tasks** — tareas reales de mantenimiento, contenido, e infraestructura para la app.
+
+3. **tierlist-feed.json actualizado** a v17 patch 26.11 — rompiendo 17 días de stale content.
+
+4. **Auditoría 3x corroborada** — reporte de GitHub con 27 archivos para borrar (~30MB recuperables).
+
+5. **Cron Job 179051** sigue enviando v7 template — necesita actualización del lado del CEO.
+
+### Next Steps for CEO
+
+1. **Actualizar Job 179051** para enviar template v4.0 compatible
+2. **Fix GitHub PAT** en botardo.env
+3. **Revisar y ejecutar cleanup** del file audit report
+4. **Asignar gaming-lider activo** que responda escalations
+5. **Considerar crear tareas recurrentes** en Supabase para auto-renewal
+
+## LEY 9: SILENCIO (UPDATED)
+When idle with no tasks and no directives:
+- Execute ONE fallback task from priority queue (see above)
+- Create bo_task entry for tracking
+- Do not generate unnecessary output
+- Maintain heartbeat
+- Log activity to bo_activity_log

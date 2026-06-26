@@ -1,0 +1,414 @@
+/* MOBA SAGE v2.1 — improved stability, performance, security */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-lol-gold: #c8aa6e;
+  --color-lol-gold-dark: #785a28;
+  --color-lol-bg: #0a0e1a;
+  --color-lol-card: #1e2328;
+  --color-lol-text: #f0e6d2;
+  --color-lol-danger: #e84057;
+  --color-lol-success: #0acbe6;
+  --color-lol-warning: #f0c646;
+  --color-lol-muted: #a09b8c;
+  --color-lol-dim: #5b5a56;
+  --color-lol-green: #0fba81;
+  --color-lol-teal: #0a7a8f;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: #0a0e1a;
+  --foreground: #f0e6d2;
+  --card: #1e2328;
+  --card-foreground: #f0e6d2;
+  --popover: #1e2328;
+  --popover-foreground: #f0e6d2;
+  --primary: #c8aa6e;
+  --primary-foreground: #0a0e1a;
+  --secondary: #1e2328;
+  --secondary-foreground: #f0e6d2;
+  --muted: #1e2328;
+  --muted-foreground: #a09b8c;
+  --accent: #c8aa6e;
+  --accent-foreground: #0a0e1a;
+  --destructive: #e84057;
+  --border: #785a28;
+  --input: #1e2328;
+  --ring: #c8aa6e;
+  --chart-1: #c8aa6e;
+  --chart-2: #0acbe6;
+  --chart-3: #e84057;
+  --chart-4: #f0c646;
+  --chart-5: #785a28;
+  --sidebar: #0a0e1a;
+  --sidebar-foreground: #f0e6d2;
+  --sidebar-primary: #c8aa6e;
+  --sidebar-primary-foreground: #0a0e1a;
+  --sidebar-accent: #1e2328;
+  --sidebar-accent-foreground: #f0e6d2;
+  --sidebar-border: #785a28;
+  --sidebar-ring: #c8aa6e;
+}
+
+/* .dark block removed — app is always dark-mode (values identical to :root) */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+  html, body {
+    @apply bg-background text-foreground;
+    overflow-x: hidden;
+    max-width: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Prevent any child from causing horizontal scroll */
+  body > div {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+  /* Prevent horizontal overflow globally */
+  #root, #__next {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, #0a0e1a, #0d1220);
+}
+::-webkit-scrollbar-thumb {
+  background: #785a28;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c8aa6e;
+}
+
+/* Thin scrollbar utility */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #785a28 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #785a28;
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #c8aa6e;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Glass morphism card effect */
+.glass-card {
+  background: rgba(30, 35, 40, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(120, 90, 40, 0.2);
+}
+
+/* Champion row hover effect */
+.champion-row {
+  background: rgba(30, 35, 40, 0.4);
+  border: 1px solid rgba(120, 90, 40, 0.1);
+}
+
+.champion-row:hover {
+  background: rgba(30, 35, 40, 0.85);
+  border-color: rgba(200, 170, 110, 0.2);
+  box-shadow: 0 0 16px rgba(200, 170, 110, 0.06);
+}
+
+/* Tier header gradient strips */
+.tier-header-s {
+  background: linear-gradient(90deg, rgba(200, 170, 110, 0.12), rgba(200, 170, 110, 0.03));
+}
+
+.tier-header-a {
+  background: linear-gradient(90deg, rgba(10, 203, 230, 0.1), rgba(10, 203, 230, 0.02));
+}
+
+/* Subtle noise overlay for depth */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.015;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Ensure content above particles */
+body > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* LoL decorative divider */
+.lol-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200,170,110,0.3), transparent);
+}
+
+/* LoL card hover with gold glow */
+.lol-card-hover {
+  transition: all 0.3s ease;
+}
+.lol-card-hover:hover {
+  border-color: rgba(200, 170, 110, 0.35);
+  box-shadow: 0 0 20px rgba(200,170,110,0.08), 0 4px 20px rgba(0,0,0,0.3);
+}
+
+/* Pulse animation for "En vivo" */
+@keyframes lol-pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 170, 110, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(200, 170, 110, 0); }
+}
+.lol-pulse {
+  animation: lol-pulse-gold 2s ease-in-out infinite;
+}
+
+/* ===== GOLD PARTICLES BACKGROUND ===== */
+@keyframes lol-float-particle {
+  0% {
+    transform: translateY(100vh) translateX(0) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(90vh) translateX(10px) scale(1);
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-10vh) translateX(var(--drift, 30px)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.lol-gold-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.lol-gold-particles .particle {
+  position: absolute;
+  bottom: -5px;
+  width: var(--size, 3px);
+  height: var(--size, 3px);
+  background: radial-gradient(circle, rgba(200, 170, 110, 0.8), rgba(200, 170, 110, 0.1));
+  border-radius: 50%;
+  animation: lol-float-particle var(--duration, 12s) var(--delay, 0s) infinite ease-in-out;
+  left: var(--left, 50%);
+  box-shadow: 0 0 var(--glow, 6px) rgba(200, 170, 110, 0.3);
+}
+
+/* Cinzel font loaded via next/font/google in layout.tsx (replaces broken Riot CDN Beaufort) */
+
+@font-face {
+  font-family: 'Beaufort';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: local('Cinzel Bold'), local('Cinzel-Bold');
+}
+
+@font-face {
+  font-family: 'Beaufort';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: local('Cinzel Regular'), local('Cinzel-Regular');
+}
+
+.lol-heading {
+  font-family: var(--font-cinzel), 'Beaufort', 'Cinzel', 'Geist Sans', serif;
+}
+
+/* Beaufort utility classes — LoL typography system */
+.lol-label {
+  font-family: var(--font-cinzel), 'Beaufort for LOL', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 400;
+}
+
+.lol-title {
+  font-family: var(--font-cinzel), 'Beaufort for LOL', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.lol-subtitle {
+  font-family: var(--font-cinzel), 'Beaufort', 'Cinzel', 'Geist Sans', serif;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* NEW PATCH badge pulse */
+@keyframes lol-new-patch-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(15, 186, 129, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(15, 186, 129, 0); }
+}
+.lol-new-patch-badge {
+  animation: lol-new-patch-pulse 1.5s ease-in-out infinite;
+}
+
+/* Game switch flash transition */
+@keyframes lol-flash-transition {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.lol-flash-overlay {
+  animation: lol-flash-transition 0.4s ease-out forwards;
+}
+
+/* Collapsible sections */
+.lol-collapsible-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.2s ease;
+}
+.lol-collapsible-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+.lol-collapsible-content.expanded {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+/* Favorite star glow */
+@keyframes lol-star-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(240, 198, 70, 0.5)); }
+  50% { filter: drop-shadow(0 0 8px rgba(240, 198, 70, 0.8)); }
+}
+.lol-fav-star {
+  animation: lol-star-glow 2s ease-in-out infinite;
+}
+
+/* En vivo badge enhanced pulse */
+.lol-live-badge {
+  animation: lol-live-pulse 2s ease-in-out infinite;
+}
+@keyframes lol-live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(15, 186, 129, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(15, 186, 129, 0), 0 0 12px rgba(15,186,129,0.15); }
+}
+
+/* Marquee animation for champion showcase */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+
+/* ===== RESPONSIVE UTILITIES ===== */
+
+/* Safe area for notched phones */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent images and media from causing overflow */
+img, video, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== APP-LIKE INTERACTIVE ELEMENTS ===== */
+/* Prevent text selection on interactive elements for a native-app feel */
+button, nav a, [role="tab"], [role="option"], [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+
